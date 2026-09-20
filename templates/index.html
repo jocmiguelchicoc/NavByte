@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NavByte | Explorador de Archivos y Streaming</title>
+  <meta name="description" content="Explorador de archivos, reproductor de audio y transferencia móvil a PC en red local WiFi sin instalaciones.">
+  
+  <!-- Fuente Google Fonts: Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Estilos Principales -->
+  <link rel="stylesheet" href="/static/css/style.css?v={{ version_ts or '3.0' }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2224%22 font-size=%2224%22>📡</text></svg>">
+  <style>
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-8px); }
+      40%       { transform: translateX(8px); }
+      60%       { transform: translateX(-6px); }
+      80%       { transform: translateX(6px); }
+    }
+    /* Pantalla de login cubre toda la pantalla */
+    #loginScreen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: var(--bg-primary);
+      background-image:
+        radial-gradient(at 20% 20%, rgba(16,185,129,0.15) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, rgba(6,182,212,0.10) 0px, transparent 50%);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #loginCard {
+      background: rgba(17,24,39,0.9);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 36px 28px;
+      width: 100%;
+      max-width: 380px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(16,185,129,0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================================
+       Pantalla de Login (Protección de Seguridad)
+       ======================================================================== -->
+  <div id="loginScreen">
+    <div id="loginCard">
+      <!-- Logo / Icono -->
+      <div style="text-align:center; margin-bottom: 24px;">
+        <div style="
+          width: 64px; height: 64px;
+          background: linear-gradient(135deg, #10b981, #06b6d4);
+          border-radius: 16px;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 2rem;
+          box-shadow: 0 0 30px rgba(16,185,129,0.4);
+          margin-bottom: 14px;
+        ">📡</div>
+        <h2 style="font-size:1.35rem; font-weight:700; margin-bottom:4px;">NavByte</h2>
+        <p style="color:var(--text-muted); font-size:0.85rem;">Acceso Seguro al Computador</p>
+      </div>
+
+      <!-- Campo Usuario -->
+      <div style="margin-bottom: 14px;">
+        <label for="loginUserInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Usuario</label>
+        <div style="position:relative;">
+          <input
+            type="text"
+            id="loginUserInput"
+            class="form-input"
+            placeholder="Usuario"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            style="width:100%; padding: 12px 14px 12px 42px; font-size: 0.95rem; border-radius: 12px;"
+            onkeydown="if(event.key==='Enter') document.getElementById('loginPasswordInput').focus()"
+          >
+          <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.1rem; opacity:0.6; pointer-events:none;">👤</span>
+        </div>
+      </div>
+
+      <!-- Campo Contraseña -->
+      <div style="margin-bottom: 16px;">
+        <label for="loginPasswordInput" style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Contraseña</label>
+        <div style="position:relative;">
+          <input
+            type="password"
+            id="loginPasswordInput"
+            class="form-input"
+            placeholder="Contraseña"
+            autocomplete="current-password"
+            style="width:100%; padding: 12px 42px 12px 42px; font-size: 0.95rem; border-radius: 12px;"
+            onkeydown="if(event.key==='Enter') submitLogin()"
+          >
+          <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.1rem; opacity:0.6; pointer-events:none;">🔑</span>
+          <button
+            type="button"
+            id="btnTogglePassword"
+            onclick="togglePasswordVisibility()"
+            style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.05rem; padding:4px;"
+            title="Mostrar u ocultar contraseña"
+          >👁️</button>
+        </div>
+      </div>
+
+      <!-- Mensaje de error -->
+      <div id="loginError" style="
+        display: none;
+        background: rgba(244,63,94,0.12);
+        border: 1px solid rgba(244,63,94,0.3);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        color: #f43f5e;
+        margin-bottom: 16px;
+        text-align: center;
+      "></div>
+
+      <!-- Botón login -->
+      <button
+        id="loginSubmitBtn"
+        class="btn-action btn-primary"
+        style="width:100%; padding: 13px; font-size: 1rem; border-radius: 12px; justify-content: center; font-weight:600;"
+        onclick="submitLogin()"
+      >
+        🔓 Iniciar Sesión
+      </button>
+
+      <!-- Aviso de seguridad -->
+      <p style="text-align:center; color:var(--text-muted); font-size:0.75rem; margin-top:18px;">
+        🔒 Cifrado PBKDF2:SHA256 • Sesión Protegida
+      </p>
+    </div>
+  </div>
+
+  <!-- Wrapper de la app principal (se oculta antes del login) -->
+  <div id="mainApp" style="display:none;">
+
+  <!-- ========================================================================
+       Cabecera Principal (Sticky Header)
+       ======================================================================== -->
+  <header class="app-header" id="appHeader">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-icon">📡</div>
+        <div class="brand-info">
+          <h1>NavByte</h1>
+          <div class="status-badge">
+            <span class="status-dot"></span>
+            <span id="serverIpBadge">Conectando...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Badge de Usuario Autenticado -->
+        <span id="userBadge" style="display:none; font-size:0.8rem; font-weight:600; padding:6px 10px; border-radius:10px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); color:var(--accent-teal); align-items:center; gap:5px;">
+          👤 <span id="userBadgeName">SageProd</span>
+        </span>
+        <button class="btn-icon" id="btnOpenQr" title="Ver código QR para compartir" onclick="openQrModal()">
+          📱
+        </button>
+        <button class="btn-icon" id="btnRefresh" title="Actualizar archivos">
+          🔄
+        </button>
+        <button class="btn-icon" id="btnLogout" title="Cerrar sesión" onclick="logout()" style="color: var(--accent-rose);">
+          🔐
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       Contenido Principal
+       ======================================================================== -->
+  <main class="main-content" id="mainContent">
+    
+    <!-- Barra de Navegación y Control de Carpetas (Flecha Atrás y Ruta Limpia) -->
+    <div class="nav-control-bar" id="navControlBar" style="display: none;">
+      <button class="btn-nav-arrow" id="btnNavBack" onclick="navigateBack()" title="Retroceder a la carpeta anterior" style="display: none;">
+        <span class="arrow-icon">←</span>
+        <span class="arrow-label">Atrás</span>
+      </button>
+
+      <nav class="breadcrumb-nav" id="breadcrumbContainer" aria-label="Ruta de carpetas">
+      </nav>
+    </div>
+
+    <!-- Barra de Herramientas en 1 Sola Línea (Buscador con botón Buscar + Acciones) -->
+    <section class="toolbar" id="appToolbar">
+      <form class="search-form" id="searchForm" onsubmit="handleSearchSubmit(event)">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input 
+            type="search" 
+            id="searchInput" 
+            class="search-input" 
+            placeholder="Buscar archivo o música..." 
+            autocomplete="off"
+            enterkeyhint="search"
+          >
+          <button type="button" class="btn-clear-search" id="btnClearSearch" onclick="clearSearch()" title="Limpiar búsqueda" style="display: none;">✕</button>
+          <button type="submit" class="btn-search-submit" id="btnSubmitSearch" title="Buscar">
+            Buscar
+          </button>
+        </div>
+      </form>
+
+      <div class="toolbar-actions">
+        <button class="btn-action btn-primary" id="btnOpenUpload" onclick="openUploadModal()" title="Subir archivos desde el celular">
+          <span>⬆️</span> <span class="btn-label">Subir</span>
+        </button>
+
+        <button class="btn-action" id="btnOpenMkdir" onclick="openMkdirModal()" title="Crear nueva carpeta">
+          <span>📁</span> <span class="btn-label">+ Carpeta</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Indicador de Carga -->
+    <div id="loadingIndicator" style="display: none; text-align: center; padding: 20px; color: var(--accent-emerald);">
+      <div style="font-size: 1.5rem; animation: spin 1s linear infinite; display: inline-block;">⏳</div>
+      <p style="font-size: 0.85rem; margin-top: 6px;">Cargando archivos...</p>
+    </div>
+
+    <!-- Contenedor del Explorador (Grid de Archivos y Carpetas) -->
+    <div class="explorer-grid" id="explorerContainer">
+      <!-- Los elementos de carpetas y archivos se renderizan dinámicamente mediante app.js -->
+    </div>
+
+    <!-- Estado Vacío -->
+    <div class="empty-state" id="emptyState" style="display: none;">
+      <div class="empty-icon">📂</div>
+      <h3>Carpeta vacía</h3>
+      <p>No hay elementos para mostrar aquí.</p>
+    </div>
+
+  </main>
+
+  <!-- ========================================================================
+       Reproductor de Audio Flotante (Dock Inferior con Controles y Descarga)
+       ======================================================================== -->
+  <aside class="audio-bar-dock" id="audioDock" aria-label="Reproductor de audio integrado">
+    <div class="audio-player-wrapper">
+      <div class="player-main-row">
+        <div class="now-playing-info" onclick="expandAudioViewer()" style="cursor: pointer;" title="Toca para ver visor completo">
+          <div class="player-music-icon" id="dockMusicIcon">🎵</div>
+          <div class="track-text">
+            <div class="track-title" id="playerTrackTitle">Pista de audio</div>
+            <div class="track-status" id="playerTrackStatus">Listo • Toca para expandir</div>
+          </div>
+        </div>
+
+        <div class="player-controls">
+          <button class="btn-card-action" onclick="playPreviousTrack()" title="Pista anterior" style="font-size: 0.95rem;">
+            ⏮
+          </button>
+          <button class="btn-circle" id="btnPlayPause" onclick="togglePlayPause()" title="Reproducir / Pausa">
+            ▶
+          </button>
+          <button class="btn-card-action" onclick="playNextTrack()" title="Pista siguiente" style="font-size: 0.95rem;">
+            ⏭
+          </button>
+          <button class="btn-card-action" id="btnDockDownload" onclick="downloadCurrentTrack()" title="Descargar este audio" style="color: var(--accent-emerald); font-weight: bold; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.15);">
+            ⬇
+          </button>
+          <button class="btn-card-action" onclick="closeAudioDock()" title="Cerrar reproductor" style="border-radius: 50%;">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Scrubber / Barra de Progreso de la pista -->
+      <div class="player-scrubber">
+        <span id="audioCurrentTime">0:00</span>
+        <div class="scrub-bar" id="audioScrubTrack">
+          <div class="scrub-progress" id="audioProgressBar"></div>
+        </div>
+        <span id="audioTotalDuration">0:00</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========================================================================
+       Modal: Visor de Archivos (Imágenes, Video, Audio, Texto, PDF, Documentos)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="fileViewerModal">
+    <div class="modal-card file-viewer-card">
+      <!-- Cabecera fija del visor -->
+      <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; margin-bottom: 0;">
+        <h2 class="modal-title" id="viewerTitle" style="font-size: 0.95rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Archivo</h2>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="viewerDownloadBtn" class="btn-action btn-primary" style="padding: 8px 14px; font-size: 0.85rem; font-weight: 600;">
+            ⬇ Descargar
+          </button>
+          <button class="btn-close" onclick="closeFileViewer()" style="font-size: 1.6rem; padding: 0 4px; line-height: 1;">&times;</button>
+        </div>
+      </div>
+      <!-- Cuerpo scrolleable del visor -->
+      <div id="viewerBody" style="overflow-y: auto; flex: 1; background: var(--bg-primary); max-height: calc(88vh - 60px);"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       Modal: Subida de Archivos
+       ======================================================================== -->
+  <div class="modal-backdrop" id="uploadModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Subir Archivos</h2>
+        <button class="btn-close" onclick="closeUploadModal()">&times;</button>
+      </div>
+
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
+        Destino: <strong id="uploadTargetFolder" style="color: var(--accent-cyan);">/</strong>
+      </p>
+
+      <div class="drop-zone" id="uploadDropZone">
+        <div class="drop-icon">📤</div>
+        <div class="drop-title">Toca aquí para seleccionar</div>
+        <div class="drop-hint">Fotos, audios, videos o archivos de tu celular</div>
+      </div>
+
+      <input type="file" id="hiddenFileInput" multiple style="display: none;">
+
+      <div class="upload-progress-container" id="uploadProgressContainer">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="uploadProgressBarFill"></div>
+        </div>
+        <div class="progress-text">
+          <span id="uploadFileCount">Subiendo...</span>
+          <span id="uploadProgressPct">0%</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action" onclick="closeUploadModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       Modal: Nueva Carpeta
+       ======================================================================== -->
+  <div class="modal-backdrop" id="mkdirModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Crear Nueva Carpeta</h2>
+        <button class="btn-close" onclick="closeMkdirModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label for="folderNameInput" class="form-label">Nombre de la carpeta:</label>
+        <input 
+          type="text" 
+          id="folderNameInput" 
+          class="form-input" 
+          placeholder="Ej: Nuevas Canciones, Grabaciones..." 
+          maxlength="80"
+        >
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action" onclick="closeMkdirModal()">Cancelar</button>
+        <button class="btn-action btn-primary" onclick="submitMkdir()">Crear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       Modal: Código QR y Enlace Directo
+       ======================================================================== -->
+  <div class="modal-backdrop" id="qrModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Conectar Celular</h2>
+        <button class="btn-close" onclick="closeQrModal()">&times;</button>
+      </div>
+
+      <div class="qr-display">
+        <img id="qrModalImage" class="qr-image" src="" alt="Código QR de Conexión Móvil">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+          Escanea este código con la cámara de tu celular para abrir la aplicación.
+        </p>
+        <div class="url-box">
+          <span id="qrUrlText">Cargando...</span>
+          <button class="btn-card-action" onclick="copyServerUrl()" title="Copiar enlace">
+            📋
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-action btn-primary" onclick="closeQrModal()">Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       Contenedor de Notificaciones Toast
+       ======================================================================== -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Script Principal con Cache Buster Dinámico -->
+  <script src="/static/js/app.js?v={{ version_ts or '3.0' }}"></script>
+
+  </div><!-- /#mainApp -->
+</body>
+</html>

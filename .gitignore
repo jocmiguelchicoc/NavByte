@@ -1,0 +1,25 @@
+# Credenciales privadas y secretos (NUNCA COMPARTIR NI SUBIR A GIT)
+.auth_credentials.json
+.password_hash
+.secret_key
+
+# Entornos virtuales Python
+venv/
+env/
+ENV/
+.venv/
+
+# Archivos compilados y cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Carpetas de datos locales
+shared/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+*.swp
+*~
