@@ -234,8 +234,9 @@ def list_directory_entries(abs_path: str, shared_dir: str) -> List[Dict[str, Any
             if name.startswith("."):
                 continue
 
-            # Omitir carpetas virtuales del SO
-            if entry.is_dir(follow_symlinks=False) and name.lower() in SYSTEM_SKIP_DIRS:
+            # Omitir carpetas virtuales o basura del SO
+            name_lower = name.lower()
+            if entry.is_dir(follow_symlinks=False) and (name_lower in SYSTEM_SKIP_DIRS or name_lower.startswith("found.")):
                 continue
 
             try:

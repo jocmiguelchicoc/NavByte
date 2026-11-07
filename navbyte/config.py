@@ -69,6 +69,7 @@ SYSTEM_SKIP_DIRS: Set[str] = {
     "cgroup", "cgroup2", "pstore", "bpf", "debugfs",
     "tracefs", "fusectl", "configfs", "securityfs",
     "efivarfs", "mqueue", "hugetlbfs", "ramfs",
+    "$recycle.bin", "system volume information", ".trash-1000"
 }
 
 # Archivos y carpetas críticas protegidas contra visualización, descarga, borrado o sobreescritura
