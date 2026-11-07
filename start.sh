@@ -28,7 +28,7 @@ if [ ! -d "venv" ]; then
     ./venv/bin/pip install -r requirements.txt --quiet
 else
     # Verificar si falta alguna dependencia
-    if ! ./venv/bin/python -c "import flask, qrcode, PIL" 2>/dev/null; then
+    if ! ./venv/bin/python -c "import flask, qrcode, PIL, waitress" 2>/dev/null; then
         echo "📦 Verificando dependencias..."
         ./venv/bin/pip install -r requirements.txt --quiet
     fi

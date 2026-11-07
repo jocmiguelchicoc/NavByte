@@ -145,4 +145,30 @@ Si vas por la calle, estás en el transporte o en otro lugar y quieres escuchar 
 
 ---
 
+## 🛡️ Arquitectura y Seguridad Reforzada (Para Desarrolladores)
+
+NavByte cuenta con una arquitectura modular y blindada contra vulnerabilidades comunes:
+
+* **Arquitectura Modular en Paquetes (`navbyte/`):**
+  * `config.py`: Centralización de configuraciones, banderas CLI y listas de seguridad.
+  * `security.py`: Sesiones con claves de 64 bytes, rate limiting anti fuerza bruta por IP real, protección CSRF y detección de rutas sensibles.
+  * `services/filesystem.py`: Resolución canónica de rutas con `os.path.realpath` para impedir Path Traversal y fugas por symlinks. Detección multiplataforma de unidades.
+  * `services/search.py`: Búsqueda segura con límites de tiempo (timeout) y exclusión de carpetas del sistema.
+  * `services/qr.py`: Generación de códigos QR en memoria y consola.
+  * `routes/`: Endpoints divididos en Blueprints limpios (`auth`, `files`, `media`, `system`).
+* **Servidor WSGI de Alto Rendimiento:**
+  * Uso de **Waitress** como motor WSGI multiproceso/multihilo para soportar streaming y transferencias concurrentes.
+* **Cabeceras HTTP de Seguridad:**
+  * `X-Content-Type-Options: nosniff`
+  * `X-Frame-Options: SAMEORIGIN`
+  * `Referrer-Policy: strict-origin-when-cross-origin`
+  * Cookies de sesión con `HttpOnly=True` y `SameSite=Lax`.
+* **Pruebas Automatizadas:**
+  * Ejecutar tests unitarios y de seguridad con:
+    ```bash
+    ./venv/bin/python -m unittest discover tests
+    ```
+
+---
+
 ¡Disfruta de tu música y tus archivos dondequiera que estés, con total privacidad y sin cables! 🎧🔥

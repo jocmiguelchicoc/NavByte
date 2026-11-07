@@ -27,7 +27,7 @@ if not exist "venv" (
     echo [INFO] Instalando dependencias necesarias (Flask, Pillow, qrcode)...
     venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 ) else (
-    venv\Scripts\python.exe -c "import flask, qrcode, PIL" >nul 2>&1
+    venv\Scripts\python.exe -c "import flask, qrcode, PIL, waitress" >nul 2>&1
     if %errorlevel% neq 0 (
         echo [INFO] Instalando dependencias faltantes...
         venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
