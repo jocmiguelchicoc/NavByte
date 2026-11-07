@@ -93,6 +93,7 @@ def automount_unmounted_drives():
     """
     Detecta automáticamente discos externos y memorias USB conectadas pero no montadas
     y los monta usando udisksctl de forma segura y sin necesidad de permisos de superusuario.
+    Omite deliberadamente particiones de recuperación (WinRE), EFI y del sistema interno.
     """
     if sys.platform != "linux":
         return
@@ -101,12 +102,19 @@ def automount_unmounted_drives():
         import subprocess
         import json
 
-        cmd = ["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,MOUNTPOINTS,TYPE"]
+        cmd = ["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,MOUNTPOINTS,TYPE,HOTPLUG,RM,PARTTYPE"]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
         if res.returncode != 0:
             return
 
         data = json.loads(res.stdout)
+
+        SYSTEM_PART_GUIDS = {
+            "de94bba4-06d1-4d40-a16a-bfd50179d6ac",  # Windows Recovery Environment
+            "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",  # EFI System Partition
+            "e3c9e316-0b5c-4db8-817d-f92df0215ae0",  # Microsoft Reserved (MSR)
+            "21686148-6449-6e6f-744e-656564454649",  # BIOS Boot
+        }
 
         def traverse(dev_list):
             for dev in dev_list:
@@ -114,10 +122,22 @@ def automount_unmounted_drives():
                 fstype = dev.get("fstype")
                 mountpoints = dev.get("mountpoints") or []
                 name = dev.get("name")
+                hotplug = bool(dev.get("hotplug"))
+                rm = bool(dev.get("rm"))
+                parttype = (dev.get("parttype") or "").lower()
+                label = dev.get("label") or ""
 
                 # Es una partición con sistema de archivos conocido que no está montada
                 if dev_type == "part" and fstype and name and not any(mountpoints):
+                    # Omitir particiones reservadas o de sistema
                     if fstype.lower() in ("swap", "bios_grub", "zfs_member", "squashfs"):
+                        continue
+                    if parttype in SYSTEM_PART_GUIDS:
+                        continue
+
+                    # Solo automontar dispositivos extraíbles/USB, o discos externos con etiqueta de usuario
+                    is_external = hotplug or rm or name.startswith("sd")
+                    if not is_external and not label:
                         continue
 
                     device_path = f"/dev/{name}"
@@ -238,6 +258,18 @@ def detect_system_drives(shared_dir: str = "/") -> List[Dict[str, Any]]:
                     }
                 except Exception:
                     disk_info = {"total": "N/A", "free": "N/A", "percent_used": 0}
+
+                # Filtrar particiones del sistema de recuperación / EFI / OEM
+                if mount_point != "/":
+                    base_name = os.path.basename(mount_point)
+                    base_lower = base_name.lower()
+                    if any(term in base_lower for term in ("recovery", "winre", "esp", "efi", "oem", "system volume", "system reserved")):
+                        continue
+
+                    # Omitir particiones menores a 4 GB que tengan nombre de ID hexadecimal (como D826D06626D04762 o 539F-1C70)
+                    if total < 4 * 1024 * 1024 * 1024:
+                        if any(c in base_name for c in ("-", "_")) or (len(base_name) >= 12 and base_name.isalnum()):
+                            continue
 
                 if mount_point == "/":
                     if os.path.isdir(home_dir):
