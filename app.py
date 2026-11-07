@@ -15,6 +15,7 @@ from navbyte.security import (
     ensure_mandatory_credentials,
 )
 from navbyte.services.qr import get_local_ip, print_ascii_qr
+from navbyte.services.filesystem import automount_unmounted_drives
 from navbyte import create_app
 
 
@@ -58,7 +59,10 @@ def main():
     # 3. Blindaje: Garantizar credenciales obligatorias siempre
     ensure_mandatory_credentials()
 
-    # 4. Crear instancia de Flask
+    # 4. Automontaje: Detectar y montar automáticamente discos externos y USBs conectadas
+    automount_unmounted_drives()
+
+    # 5. Crear instancia de Flask
     app = create_app(
         shared_dir=shared_dir,
         readonly=args.readonly,

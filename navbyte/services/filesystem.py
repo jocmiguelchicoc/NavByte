@@ -89,12 +89,69 @@ def safe_resolve_path(rel_path: str, shared_dir: str) -> Tuple[str, bool]:
     return real_target, True
 
 
+def automount_unmounted_drives():
+    """
+    Detecta automáticamente discos externos y memorias USB conectadas pero no montadas
+    y los monta usando udisksctl de forma segura y sin necesidad de permisos de superusuario.
+    """
+    if sys.platform != "linux":
+        return
+
+    try:
+        import subprocess
+        import json
+
+        cmd = ["lsblk", "-J", "-o", "NAME,FSTYPE,LABEL,MOUNTPOINTS,TYPE"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
+        if res.returncode != 0:
+            return
+
+        data = json.loads(res.stdout)
+
+        def traverse(dev_list):
+            for dev in dev_list:
+                dev_type = dev.get("type")
+                fstype = dev.get("fstype")
+                mountpoints = dev.get("mountpoints") or []
+                name = dev.get("name")
+
+                # Es una partición con sistema de archivos conocido que no está montada
+                if dev_type == "part" and fstype and name and not any(mountpoints):
+                    if fstype.lower() in ("swap", "bios_grub", "zfs_member", "squashfs"):
+                        continue
+
+                    device_path = f"/dev/{name}"
+                    # 1. Intentar montaje normal
+                    m_res = subprocess.run(
+                        ["udisksctl", "mount", "-b", device_path],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5
+                    )
+                    # 2. Si falla (ej: dirty flag de Windows en NTFS), fallback a sólo lectura
+                    if m_res.returncode != 0:
+                        subprocess.run(
+                            ["udisksctl", "mount", "-b", device_path, "-o", "ro"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5
+                        )
+
+                children = dev.get("children")
+                if children:
+                    traverse(children)
+
+        traverse(data.get("blockdevices", []))
+    except Exception:
+        pass
+
+
 def detect_system_drives(shared_dir: str = "/") -> List[Dict[str, Any]]:
     r"""
     Detecta y retorna las particiones y unidades montadas reales del sistema.
     Soporta Linux (/proc/mounts) y Windows (letras de unidad C:\, D:\, etc.).
     Filtra montajes virtuales del SO y particiones reservadas.
     """
+    # En Linux, montar automáticamente cualquier disco o USB conectada que aún no esté montada
+    if sys.platform == "linux":
+        automount_unmounted_drives()
+
     drives = []
 
     # Soporte nativo para Windows
