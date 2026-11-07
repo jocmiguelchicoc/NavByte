@@ -33,6 +33,7 @@ if [ ! -f "$PROJECT_DIR/venv/bin/python" ]; then
 fi
 
 # 3. Crear archivo de servicio systemd
+chmod +x "$PROJECT_DIR/run_service.sh"
 cat << EOF > "$SERVICE_FILE"
 [Unit]
 Description=NavByte Remote Audio & File Server
@@ -43,8 +44,8 @@ Wants=network-online.target
 Type=simple
 User=$CURRENT_USER
 Group=$CURRENT_USER
-WorkingDirectory="$PROJECT_DIR"
-ExecStart="$PROJECT_DIR/venv/bin/python" "$PROJECT_DIR/app.py" -p 5000
+WorkingDirectory=$PROJECT_DIR
+ExecStart=/bin/bash "$PROJECT_DIR/run_service.sh"
 Restart=always
 RestartSec=5
 KillMode=mixed
