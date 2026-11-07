@@ -36,7 +36,7 @@ fi
 cat << EOF > "$SERVICE_FILE"
 [Unit]
 Description=NavByte Remote Audio & File Server
-After=network-online.target
+After=network-online.target local-fs.target
 Wants=network-online.target
 
 [Service]
