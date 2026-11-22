@@ -77,7 +77,14 @@ def main():
     try:
         from waitress import serve
         print("⚡ Motor de alto rendimiento: Waitress WSGI activo")
-        serve(app, host=args.host, port=args.port, threads=args.threads)
+        # 10 GB de tamaño máximo de cuerpo de petición para soportar subida de videos/archivos grandes
+        serve(
+            app,
+            host=args.host,
+            port=args.port,
+            threads=args.threads,
+            max_request_body_size=10 * 1024 * 1024 * 1024
+        )
     except ImportError:
         print("⚠️ Waitress no encontrado. Ejecutando con servidor estándar de Flask.")
         print("👉 Recomendado: pip install waitress para máxima velocidad y estabilidad.")

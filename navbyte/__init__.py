@@ -74,6 +74,13 @@ def create_app(
         return response
 
     # 4. Manejadores de Error Globales
+    @app.errorhandler(400)
+    def bad_request_handler(e):
+        if request.path.startswith("/api/"):
+            msg = getattr(e, "description", "Petición no válida")
+            return jsonify({"error": str(msg)}), 400
+        return "Petición incorrecta", 400
+
     @app.errorhandler(404)
     def not_found_handler(e):
         if request.path.startswith("/api/"):
@@ -82,16 +89,29 @@ def create_app(
 
     @app.errorhandler(403)
     def forbidden_handler(e):
-        return jsonify({"error": "Acceso denegado o protegido por seguridad"}), 403
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Acceso denegado o protegido por seguridad"}), 403
+        return "Acceso denegado", 403
 
     @app.errorhandler(413)
     def request_entity_too_large(e):
-        return jsonify({"error": "El archivo excede el tamaño máximo permitido (10 GB)"}), 413
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "El archivo excede el tamaño máximo permitido (10 GB)"}), 413
+        return "Archivo demasiado grande", 413
 
     @app.errorhandler(500)
     def internal_error_handler(e):
-        app.logger.error(f"Error interno no controlado: {e}")
-        return jsonify({"error": "Error interno del servidor"}), 500
+        app.logger.error(f"Error interno: {e}")
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Error interno del servidor"}), 500
+        return "Error interno del servidor", 500
+
+    @app.errorhandler(Exception)
+    def unhandled_exception_handler(e):
+        app.logger.error(f"Error no controlado en la aplicación: {e}", exc_info=True)
+        if request.path.startswith("/api/"):
+            return jsonify({"error": f"Error del servidor: {str(e)}"}), 500
+        return "Error interno del servidor", 500
 
     # 5. Registrar Blueprints
     app.register_blueprint(auth_bp)

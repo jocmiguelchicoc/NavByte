@@ -28,6 +28,7 @@ from ..security import require_auth, is_protected_system_path
 from ..services.filesystem import (
     safe_resolve_path,
     detect_system_drives,
+    automount_unmounted_drives,
     list_directory_entries,
     get_file_category,
     format_size,
@@ -279,10 +280,26 @@ def upload():
 
     shared_dir = current_app.config["SHARED_DIR"]
     rel_path = request.form.get("path", "").strip()
+
+    # Bloquear subidas directas a la raíz del sistema
+    if not rel_path or rel_path in (".", "/", "\\"):
+        return jsonify({
+            "error": "No se puede subir directamente a la raíz del sistema. Entra primero a un disco o carpeta de destino."
+        }), 400
+
     abs_path, is_valid = safe_resolve_path(rel_path, shared_dir)
 
+    # Si es una unidad en /media/ que aún no está montada, intentar automontaje reactivo
+    if (not is_valid or not os.path.exists(abs_path)) and (rel_path.startswith("media/") or abs_path.startswith("/media/")):
+        automount_unmounted_drives()
+        abs_path, is_valid = safe_resolve_path(rel_path, shared_dir)
+
     if not is_valid or not os.path.isdir(abs_path):
-        return jsonify({"error": "Directorio de destino no válido o acceso denegado"}), 400
+        return jsonify({"error": "Directorio de destino no válido, desconectado o acceso denegado"}), 400
+
+    if not os.access(abs_path, os.W_OK):
+        folder_display = os.path.basename(abs_path) or abs_path
+        return jsonify({"error": f"Sin permisos de escritura en la carpeta de destino '{folder_display}'"}), 403
 
     uploaded_files = request.files.getlist("files")
     if not uploaded_files or uploaded_files[0].filename == "":
@@ -295,10 +312,14 @@ def upload():
 
         raw_filename = os.path.basename(file.filename)
         safe_name = secure_filename(raw_filename)
-        if not safe_name:
-            safe_name = f"upload_{int(time.time())}"
+        orig_ext = Path(raw_filename).suffix.lower()
 
-        # Prevención contra subida de scripts maliciosos en directorios raíz
+        if not safe_name:
+            safe_name = f"upload_{int(time.time())}{orig_ext}"
+        elif orig_ext and not safe_name.lower().endswith(orig_ext):
+            safe_name = f"{safe_name}{orig_ext}"
+
+        # Prevención contra subida de scripts maliciosos en directorios raíz o del sistema
         file_ext = Path(safe_name).suffix.lower()
         if file_ext in DANGEROUS_UPLOAD_EXTS and abs_path in ("/", "\\", "/etc", "/usr", "/bin"):
             return jsonify({"error": f"Por seguridad no se permite subir ejecutables ({file_ext}) a carpetas del sistema"}), 403
@@ -340,12 +361,25 @@ def mkdir():
     if not folder_name:
         return jsonify({"error": "El nombre de la carpeta no puede estar vacío"}), 400
 
+    # Bloquear creación directa de carpetas en la raíz del sistema
+    if not rel_path or rel_path in (".", "/", "\\"):
+        return jsonify({
+            "error": "No se pueden crear carpetas en la raíz del sistema. Entra primero a un disco o carpeta de destino."
+        }), 400
+
     safe_folder_name = secure_filename(folder_name) or folder_name.replace("/", "_").replace("\\", "_")
     target_rel = os.path.join(rel_path, safe_folder_name) if rel_path else safe_folder_name
     abs_path, is_valid = safe_resolve_path(target_rel, shared_dir)
 
     if not is_valid:
         return jsonify({"error": "Ruta inválida o protegida"}), 400
+
+    parent_abs = os.path.dirname(abs_path)
+    if not os.path.exists(parent_abs) and (rel_path.startswith("media/") or parent_abs.startswith("/media/")):
+        automount_unmounted_drives()
+
+    if not os.path.isdir(parent_abs) or not os.access(parent_abs, os.W_OK):
+        return jsonify({"error": "No tienes permisos de escritura en la carpeta seleccionada"}), 403
 
     if os.path.exists(abs_path):
         return jsonify({"error": "Ya existe una carpeta o archivo con ese nombre"}), 400

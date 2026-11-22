@@ -1479,10 +1479,14 @@ function formatAudioTime(seconds) {
 // ==========================================================================
 
 function openUploadModal() {
+  if (!AppState.currentPath) {
+    showToast('Selecciona primero un disco o carpeta de destino para subir archivos', 'info');
+    return;
+  }
   const modal = document.getElementById('uploadModal');
   const pathLabel = document.getElementById('uploadTargetFolder');
   if (pathLabel) {
-    pathLabel.textContent = AppState.currentPath ? `/${AppState.currentPath}` : '/ (Carpeta Raíz)';
+    pathLabel.textContent = `/${AppState.currentPath}`;
   }
   resetUploadProgress();
   if (modal) modal.classList.add('open');
@@ -1506,6 +1510,13 @@ function resetUploadProgress() {
 /** Realiza la subida de archivos mediante XMLHttpRequest para tracking */
 function handleUploadFiles(fileList) {
   if (!fileList || fileList.length === 0) return;
+
+  if (!AppState.currentPath) {
+    showToast('Selecciona primero un disco o carpeta de destino', 'warning');
+    return;
+  }
+
+  const fileInput = document.getElementById('hiddenFileInput');
 
   const formData = new FormData();
   formData.append('path', AppState.currentPath);
@@ -1534,22 +1545,53 @@ function handleUploadFiles(fileList) {
   };
 
   xhr.onload = () => {
+    if (fileInput) fileInput.value = '';
+    let res = null;
     try {
-      const res = JSON.parse(xhr.responseText);
-      if (xhr.status === 200 && res.success) {
-        showToast(res.message, 'success');
-        closeUploadModal();
-        loadDirectory(AppState.currentPath);
-      } else {
-        showToast(res.error || 'Error al subir archivo', 'error');
+      if (xhr.responseText) {
+        res = JSON.parse(xhr.responseText);
       }
     } catch (e) {
-      showToast('Error procesando respuesta del servidor', 'error');
+      console.warn('Respuesta no JSON del servidor:', xhr.status, xhr.responseText);
+    }
+
+    if (xhr.status === 200 && res && res.success) {
+      showToast(res.message || 'Archivo(s) subido(s) con éxito', 'success');
+      closeUploadModal();
+      loadDirectory(AppState.currentPath);
+    } else {
+      let errorMsg = res && res.error;
+      if (!errorMsg) {
+        if (xhr.status === 413) {
+          errorMsg = 'El archivo es demasiado grande para ser subido';
+        } else if (xhr.status === 401) {
+          errorMsg = 'Sesión expirada. Por favor vuelve a iniciar sesión';
+          setTimeout(showLoginScreen, 1500);
+        } else if (xhr.status === 403) {
+          errorMsg = 'Permiso denegado para escribir en esta ubicación';
+        } else if (xhr.status >= 500) {
+          errorMsg = 'Error en el servidor al guardar el archivo';
+        } else if (xhr.status !== 200) {
+          errorMsg = `Error al subir (${xhr.status}): ${xhr.statusText || 'Error inesperado'}`;
+        } else {
+          errorMsg = 'Error procesando la subida en el servidor';
+        }
+      }
+      showToast(errorMsg, 'error');
+      resetUploadProgress();
     }
   };
 
   xhr.onerror = () => {
-    showToast('Error de conexión al subir archivo', 'error');
+    if (fileInput) fileInput.value = '';
+    showToast('Error de conexión de red al subir archivo', 'error');
+    resetUploadProgress();
+  };
+
+  xhr.ontimeout = () => {
+    if (fileInput) fileInput.value = '';
+    showToast('Tiempo de espera agotado al subir archivo', 'error');
+    resetUploadProgress();
   };
 
   xhr.send(formData);
@@ -1560,6 +1602,10 @@ function handleUploadFiles(fileList) {
 // ==========================================================================
 
 function openMkdirModal() {
+  if (!AppState.currentPath) {
+    showToast('Selecciona primero un disco o carpeta de destino para crear una nueva carpeta', 'info');
+    return;
+  }
   const modal = document.getElementById('mkdirModal');
   const input = document.getElementById('folderNameInput');
   if (input) input.value = '';
